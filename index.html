@@ -122,6 +122,8 @@ body {
   justify-content: center;
 }
 
+.theme-toggle svg { display: block; }
+
 .theme-toggle:hover {
   background: var(--surface-hover);
   border-color: var(--accent-color);
@@ -1227,9 +1229,9 @@ body {
 
   <div class="nav-right">
     <button class="theme-toggle" onclick="toggleTheme()" title="Mudar tema">
-      <span id="theme-icon">🌙</span>
+      <span id="theme-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
     </button>
-    <a href="https://https://discord.gg/DuC8QJBJZe" class="discord-btn" target="_blank" rel="noopener noreferrer">Entrar no Servidor</a>
+    <a href="https://discord.gg/DuC8QJBJZe" class="discord-btn" target="_blank" rel="noopener noreferrer">Entrar no Servidor</a>
   </div>
 </nav>
 
@@ -1258,7 +1260,7 @@ body {
 
   <div class="hero-buttons">
     <button class="btn-primary" onclick="document.querySelector('#planos').scrollIntoView({behavior:'smooth'})">Ver Planos</button>
-    <a href="https://https://https://discord.gg/DuC8QJBJZe" class="btn-secondary" target="_blank" rel="noopener noreferrer">Acessar Loja</a>
+    <a href="https://discord.gg/DuC8QJBJZe" class="btn-secondary" target="_blank" rel="noopener noreferrer">Acessar Loja</a>
   </div>
 </div>
 
@@ -1774,6 +1776,9 @@ body {
 <script src="./supabase-client.js"></script>
 <script src="./site-content.js"></script>
 <script>
+var ICON_SUN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+var ICON_MOON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
 function toggleTheme() {
   const html = document.documentElement;
   const currentTheme = html.getAttribute('data-theme');
@@ -1783,7 +1788,7 @@ function toggleTheme() {
   localStorage.setItem('theme', newTheme);
   
   const icon = document.getElementById('theme-icon');
-  icon.textContent = newTheme === 'light' ? '☾' : '☀︎';
+  icon.innerHTML = newTheme === 'light' ? ICON_MOON : ICON_SUN;
 }
 
 // Restaurar tema salvo
@@ -1791,7 +1796,7 @@ window.addEventListener('load', function() {
   const savedTheme = localStorage.getItem('theme') || 'light';
   document.documentElement.setAttribute('data-theme', savedTheme);
   const icon = document.getElementById('theme-icon');
-  icon.textContent = savedTheme === 'light' ? '☾' : '☀︎';
+  icon.innerHTML = savedTheme === 'light' ? ICON_MOON : ICON_SUN;
 
   const visitCounter = document.getElementById('visit-counter');
   const updateVisitCounter = function() {
