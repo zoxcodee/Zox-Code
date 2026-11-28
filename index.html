@@ -485,7 +485,7 @@ body {
 
 .testimonial-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1.5rem;
 }
 
@@ -2300,7 +2300,7 @@ function loc() { try { return JSON.parse(localStorage.getItem('zox_reviews') || 
 function show(list) {
   var g = $('.testimonial-grid'); if (!g) return;
   [].slice.call(g.querySelectorAll('.rv-dyn')).forEach(function (x) { x.remove(); });
-  var tw = g.closest('.testimonials'); if (tw) tw.style.display = list.length ? '' : 'none';
+  if (window.__rvBtn) { window.__rvBtn.hidden = !list.length; window.__rvBtn.querySelector('b').textContent = list.length; }
   list.forEach(function (r) {
     var n = Math.max(1, Math.min(5, r.rating | 0)), d = document.createElement('div'); d.className = 'testimonial rv-dyn';
     d.innerHTML = '<div class="testimonial-stars">' + '⭐'.repeat(n) + '</div><div class="testimonial-text">“' + esc(r.comment) + '”</div><div class="testimonial-author">' + (r.tag ? '<span class="rv-tag">' + esc(r.tag) + '</span>' : '') + esc(r.name) + ' • ' + esc(r.product || 'Cliente') + '</div>';
@@ -2308,9 +2308,9 @@ function show(list) {
   });
 }
 function load() {
-  if (SB) fetch(base + 'reviews?select=name,rating,comment,product,tag&status=eq.aprovada&order=created_at.desc&limit=12', { headers: hd() })
+  if (SB) fetch(base + 'reviews?select=name,rating,comment,product,tag&status=eq.aprovada&order=created_at.desc&limit=100', { headers: hd() })
     .then(function (r) { return r.json(); }).then(function (a) { if (Array.isArray(a)) show(a); }).catch(function () {});
-  else show(loc().filter(function (r) { return r.status === 'aprovada'; }).slice(0, 12));
+  else show(loc().filter(function (r) { return r.status === 'aprovada'; }).slice(0, 100));
 }
 var anchor = $('#avaliacoes .testimonials') || $('#avaliacoes .section'); if (!anchor) return;
 var box = document.createElement('div'); box.className = 'rv-box'; box.id = 'avaliar';
@@ -2322,6 +2322,29 @@ box.innerHTML = '<h3>✍️ Deixe sua avaliação</h3><p>Conte como foi sua expe
   '<input id="rvH" class="rv-hp" tabindex="-1" autocomplete="off" aria-hidden="true" placeholder="Não preencha">' +
   '<button type="button" class="rv-bt" id="rvB">Enviar avaliação</button><div class="rv-msg" id="rvM" role="status"></div>';
 anchor.parentNode.insertBefore(box, anchor.nextSibling);
+/* Botão "Avaliações" + aba com todas as avaliações */
+(function () {
+  var st = document.createElement('style');
+  st.textContent = '.rv-open{display:flex;align-items:center;justify-content:center;gap:.5rem;margin:0 auto 1.5rem;padding:.85rem 1.6rem;border-radius:12px;border:1px solid var(--accent-color,#0066ff);background:transparent;color:var(--text-primary,#fff);font:inherit;font-weight:700;cursor:pointer;transition:all .2s}.rv-open:hover{background:var(--accent-color,#0066ff);color:#fff}.rv-open[hidden]{display:none}' +
+    '.rv-ov{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)}.rv-ov.on{display:flex}' +
+    '.rv-pn{width:100%;max-width:1100px;max-height:88vh;display:flex;flex-direction:column;background:var(--section-bg,#161616);border:1px solid var(--border-color,#333);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.5)}' +
+    '.rv-ph{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.1rem 1.4rem;border-bottom:1px solid var(--border-color,#333)}.rv-ph h3{margin:0;font-size:1.25rem}' +
+    '.rv-x{width:38px;height:38px;border-radius:50%;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary,#fff);font-size:1.1rem;cursor:pointer}.rv-x:hover{background:var(--accent-color,#0066ff);border-color:transparent}' +
+    '.rv-bd{overflow-y:auto;padding:1.2rem}.rv-bd .testimonials{margin:0;padding:0;background:transparent}';
+  document.head.appendChild(st);
+  var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'rv-open'; btn.hidden = true;
+  btn.innerHTML = '⭐ Avaliações <span>(<b>0</b>)</span>';
+  box.parentNode.insertBefore(btn, box); window.__rvBtn = btn;
+  var ov = document.createElement('div'); ov.className = 'rv-ov';
+  ov.innerHTML = '<div class="rv-pn" role="dialog" aria-modal="true" aria-label="Avaliações de clientes"><div class="rv-ph"><h3>⭐ Avaliações de Clientes</h3><button type="button" class="rv-x" aria-label="Fechar">✕</button></div><div class="rv-bd"></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('.rv-bd').appendChild(anchor);
+  function open() { ov.classList.add('on'); document.body.style.overflow = 'hidden'; }
+  function close() { ov.classList.remove('on'); document.body.style.overflow = ''; }
+  btn.onclick = open; ov.querySelector('.rv-x').onclick = close;
+  ov.onclick = function (e) { if (e.target === ov) close(); };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+})();
 var rating = 0, stars = [].slice.call(box.querySelectorAll('.rv-s'));
 function paint(n) { stars.forEach(function (b, i) { b.classList.toggle('on', i < n); }); }
 stars.forEach(function (b) {
