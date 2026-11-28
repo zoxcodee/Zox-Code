@@ -1247,6 +1247,8 @@ html{scroll-padding-top:72px}
 .rv-box input,.rv-box textarea{width:100%;padding:.8rem .95rem;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font:inherit;font-size:.95rem;margin-bottom:.7rem;text-align:left;transition:.2s}
 .rv-box textarea{resize:vertical;min-height:110px}.rv-box input:focus,.rv-box textarea:focus{outline:0;border-color:var(--accent-color);box-shadow:0 0 0 3px rgba(0,102,255,.2)}
 .rv-hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;opacity:0}
+.rv-box select{width:100%;padding:.8rem .95rem;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font:inherit;font-size:.95rem;margin-bottom:.7rem;text-align:left;transition:.2s}.rv-box select:focus{outline:0;border-color:var(--accent-color)}
+.rv-tag{display:inline-block;margin-right:.45rem;padding:.1rem .55rem;border-radius:6px;font-size:.72rem;font-weight:700;color:var(--accent-color);background:rgba(0,102,255,.14);border:1px solid rgba(0,102,255,.45);vertical-align:middle}
 .rv-ct{text-align:right;font-size:.75rem;color:var(--text-muted);margin:-.3rem 0 .8rem}
 .rv-bt{width:100%;border:0;border-radius:12px;padding:.95rem;font:inherit;font-weight:700;font-size:1rem;color:#fff;background:linear-gradient(135deg,#0066ff,#0040ff);cursor:pointer;transition:.25s;box-shadow:0 8px 22px rgba(0,102,255,.35)}.rv-bt:hover{transform:translateY(-2px)}.rv-bt:disabled{opacity:.6;cursor:wait}
 .rv-msg{min-height:1.2em;margin-top:.8rem;font-size:.88rem;color:#e5484d}
@@ -2263,12 +2265,12 @@ function show(list) {
   [].slice.call(g.querySelectorAll('.rv-dyn')).forEach(function (x) { x.remove(); });
   list.forEach(function (r) {
     var n = Math.max(1, Math.min(5, r.rating | 0)), d = document.createElement('div'); d.className = 'testimonial rv-dyn';
-    d.innerHTML = '<div class="testimonial-stars">' + '⭐'.repeat(n) + '</div><div class="testimonial-text">“' + esc(r.comment) + '”</div><div class="testimonial-author">' + esc(r.name) + ' • Cliente</div>';
+    d.innerHTML = '<div class="testimonial-stars">' + '⭐'.repeat(n) + '</div><div class="testimonial-text">“' + esc(r.comment) + '”</div><div class="testimonial-author">' + (r.tag ? '<span class="rv-tag">' + esc(r.tag) + '</span>' : '') + esc(r.name) + ' • ' + esc(r.product || 'Cliente') + '</div>';
     g.appendChild(d);
   });
 }
 function load() {
-  if (SB) fetch(base + 'reviews?select=name,rating,comment&status=eq.aprovada&order=created_at.desc&limit=12', { headers: hd() })
+  if (SB) fetch(base + 'reviews?select=name,rating,comment,product,tag&status=eq.aprovada&order=created_at.desc&limit=12', { headers: hd() })
     .then(function (r) { return r.json(); }).then(function (a) { if (Array.isArray(a)) show(a); }).catch(function () {});
   else show(loc().filter(function (r) { return r.status === 'aprovada'; }).slice(0, 12));
 }
@@ -2277,6 +2279,7 @@ var box = document.createElement('div'); box.className = 'rv-box'; box.id = 'ava
 box.innerHTML = '<h3>✍️ Deixe sua avaliação</h3><p>Conte como foi sua experiência com a Zox Code. Sua avaliação aparece no site após a aprovação da nossa equipe.</p>' +
   '<div class="rv-st" role="radiogroup" aria-label="Nota">' + [1, 2, 3, 4, 5].map(function (n) { return '<button type="button" class="rv-s" data-n="' + n + '" aria-label="' + n + (n > 1 ? ' estrelas' : ' estrela') + '">★</button>'; }).join('') + '</div>' +
   '<input id="rvN" maxlength="60" placeholder="Seu nome (ou nome do seu servidor)" autocomplete="name">' +
+  '<select id="rvP" style="display:none" aria-label="Produto adquirido"></select>' +
   '<textarea id="rvC" maxlength="600" placeholder="Escreva sua avaliação…"></textarea><div class="rv-ct"><span id="rvK">0</span>/600</div>' +
   '<input id="rvH" class="rv-hp" tabindex="-1" autocomplete="off" aria-hidden="true" placeholder="Não preencha">' +
   '<button type="button" class="rv-bt" id="rvB">Enviar avaliação</button><div class="rv-msg" id="rvM" role="status"></div>';
@@ -2297,11 +2300,14 @@ $('#rvB', box).onclick = function () {
   var name = $('#rvN', box).value.trim(), c = $('#rvC', box).value.trim(), btn = this;
   if (!rating) return msg('Escolha uma nota de 1 a 5 estrelas.');
   if (name.length < 2) return msg('Informe seu nome.');
+  var sp = $('#rvP', box), hasP = sp && sp.style.display !== 'none', prod = hasP ? sp.value : '';
+  if (hasP && !prod) return msg('Selecione o produto que você adquiriu.');
   if (c.length < 10) return msg('Escreva pelo menos 10 caracteres na avaliação.');
   var last = 0; try { last = +localStorage.getItem('zox_rev_last') || 0; } catch (e) {}
   if (Date.now() - last < 3600000) return msg('Você já enviou uma avaliação há pouco tempo. Obrigado!');
   if ($('#rvH', box).value) return done();
   var o = { name: name, rating: rating, comment: c, status: 'pendente' };
+  if (prod) o.product = prod;
   if (SB) {
     btn.disabled = true; msg('');
     fetch(base + 'reviews', { method: 'POST', headers: hd({ Prefer: 'return=minimal' }), body: JSON.stringify(o) })
@@ -2312,6 +2318,18 @@ $('#rvB', box).onclick = function () {
     done();
   }
 };
+function prodList() {
+  if (!SB) return;
+  fetch(C.supabaseUrl.replace(/\/$/, '') + '/rest/v1/settings?key=eq.products&select=value', { headers: hd() })
+    .then(function (r) { return r.json(); }).then(function (a) {
+      var l = a && a[0] && a[0].value && a[0].value.list;
+      if (!Array.isArray(l) || !l.length) return;
+      var s = $('#rvP', box); if (!s) return;
+      s.innerHTML = '<option value="">Qual produto você adquiriu?</option>' + l.map(function (p) { return '<option>' + esc(p) + '</option>'; }).join('');
+      s.style.display = '';
+    }).catch(function () {});
+}
+prodList();
 load();
 })();
 </script>

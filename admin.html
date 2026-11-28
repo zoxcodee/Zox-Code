@@ -84,24 +84,42 @@ function shell(){
     $('#app').innerHTML='<div class="lg"><img src="'+LOGO+'" alt="Zox Code"><h2>Painel Admin</h2><input id="le" type="email" placeholder="E-mail" autocomplete="username"><input id="lp" type="password" placeholder="Senha" autocomplete="current-password"><button class="btn p" id="lb">Entrar</button><p id="lm"></p></div>';
     $('#lb').onclick=login;$('#lp').onkeydown=function(e){if(e.key==='Enter')login()};return
   }
-  $('#app').innerHTML='<div class="top"><img src="'+LOGO+'" alt=""><b>Painel<small>Zox Code • Admin</small></b><button class="btn on" data-v="o">Pedidos</button><button class="btn" data-v="p">Pagamentos</button><button class="btn" data-v="r">Avaliações</button><button class="btn" id="rf" title="Atualizar">↻</button>'+(SB?'<button class="btn" id="lo">Sair</button>':'')+'</div>'+
+  $('#app').innerHTML='<div class="top"><img src="'+LOGO+'" alt=""><b>Painel<small>Zox Code • Admin</small></b><button class="btn on" data-v="o">Pedidos</button><button class="btn" data-v="p">Pagamentos</button><button class="btn" data-v="g">Produtos</button><button class="btn" data-v="r">Avaliações</button><button class="btn" id="rf" title="Atualizar">↻</button>'+(SB?'<button class="btn" id="lo">Sair</button>':'')+'</div>'+
    '<div class="wrap">'+(SB?'':'<div class="nt">⚠️ Modo local: exibindo apenas dados deste navegador. Configure o Supabase para receber os pedidos de todos os clientes e publicar os dados de pagamento no site.</div>')+
-   '<div id="vo"><div class="stats" id="st"></div><div class="bar"><div class="tabs" id="tb"></div><input class="s" id="sq" placeholder="Buscar nome, Discord, e-mail, ID…"></div><div id="ls"></div></div><div id="vp" style="display:none"></div><div id="vr" style="display:none"></div></div>';
+   '<div id="vo"><div class="stats" id="st"></div><div class="bar"><div class="tabs" id="tb"></div><input class="s" id="sq" placeholder="Buscar nome, Discord, e-mail, ID…"></div><div id="ls"></div></div><div id="vp" style="display:none"></div><div id="vg" style="display:none"></div><div id="vr" style="display:none"></div></div>';
   $('#rf').onclick=function(){view==='o'?load():setView(view)};if(SB)$('#lo').onclick=logout;$('#sq').oninput=function(){q=this.value.toLowerCase();draw()};setView(view);loadRev()
 }
 function setView(v){
-  view=v;$('#vo').style.display=v==='o'?'':'none';$('#vp').style.display=v==='p'?'':'none';$('#vr').style.display=v==='r'?'':'none';
+  view=v;$('#vo').style.display=v==='o'?'':'none';$('#vp').style.display=v==='p'?'':'none';$('#vg').style.display=v==='g'?'':'none';$('#vr').style.display=v==='r'?'':'none';
   document.querySelectorAll('[data-v]').forEach(function(b){b.classList.toggle('on',b.dataset.v===v)});
-  if(v==='o')load();else if(v==='r')loadRev();else getSet(function(x){pay={pix:x.pix||{},card:x.card||{}};drawPay()})
+  if(v==='o')load();else if(v==='r')loadRev();else if(v==='g')loadProds();else getSet(function(x){pay={pix:x.pix||{},card:x.card||{}};drawPay()})
 }
 /* ===== Configurações de pagamento ===== */
-function getSet(cb){
-  if(!SB){try{cb((JSON.parse(localStorage.getItem('zox_settings')||'{}')).payment||{})}catch(e){cb({})}return}
-  rest('settings?key=eq.payment&select=value').then(function(r){return r.json()}).then(function(a){cb((a[0]&&a[0].value)||{})}).catch(function(){cb({})})
+function getSet(cb,key){
+  key=key||'payment';
+  if(!SB){try{cb((JSON.parse(localStorage.getItem('zox_settings')||'{}'))[key]||{})}catch(e){cb({})}return}
+  rest('settings?key=eq.'+key+'&select=value').then(function(r){return r.json()}).then(function(a){cb((a[0]&&a[0].value)||{})}).catch(function(e){showErr(e);cb({})})
 }
-function putSet(v,ok,fail){
-  if(!SB){try{localStorage.setItem('zox_settings',JSON.stringify({payment:v}));ok()}catch(e){fail(e)}return}
-  rest('settings?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:'payment',value:v})}).then(ok).catch(fail)
+function putSet(v,ok,fail,key){
+  key=key||'payment';
+  if(!SB){try{var S=JSON.parse(localStorage.getItem('zox_settings')||'{}');S[key]=v;localStorage.setItem('zox_settings',JSON.stringify(S));ok()}catch(e){fail(e)}return}
+  rest('settings?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:key,value:v})}).then(ok).catch(fail)
+}
+/* ===== Produtos (o cliente escolhe ao avaliar) ===== */
+var prods=[];
+function loadProds(){getSet(function(x){prods=Array.isArray(x.list)?x.list.slice():[];drawProds()},'products')}
+function drawProds(){
+  $('#vg').innerHTML='<div class="nt" style="background:rgba(0,102,255,.1);border-color:rgba(0,102,255,.4)">Estes são os produtos que o cliente escolhe ao enviar a avaliação. Se a lista ficar vazia, o campo não aparece no site.</div>'+
+   '<div class="pf"><h3>🛒 Produtos</h3><label>Adicionar produto</label><div style="display:flex;gap:.6rem"><input type="text" id="np" maxlength="80" placeholder="Ex.: Bot de Vendas"><button class="btn p" data-a="padd">Adicionar</button></div>'+
+   '<div style="margin-top:1rem">'+(prods.length?prods.map(function(p,i){return '<div style="display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem;margin-bottom:.4rem;background:var(--s2);border:1px solid var(--bd);border-radius:10px"><span style="flex:1">'+esc(p)+'</span><button class="btn no" data-a="pdel" data-id="'+i+'">Remover</button></div>'}).join(''):'<div class="em">Nenhum produto cadastrado.</div>')+'</div></div>'+
+   '<button class="btn p" data-a="psave">Salvar produtos</button><span id="pg" style="margin-left:.8rem;font-size:.85rem"></span>';
+  var n=$('#np');if(n)n.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();addProd()}}
+}
+function addProd(){var n=$('#np'),v=n?n.value.trim():'';if(!v)return;if(prods.indexOf(v)<0)prods.push(v);drawProds()}
+function saveProds(){
+  var n=$('#np'),v=n?n.value.trim():'';if(v&&prods.indexOf(v)<0)prods.push(v);
+  $('#pg').style.color='';$('#pg').textContent='Salvando…';
+  putSet({list:prods},function(){drawProds();$('#pg').style.color='#22c55e';$('#pg').textContent='Salvo ✓ — já aparece no formulário de avaliação.'},function(){$('#pg').style.color='#e5484d';$('#pg').textContent='Erro ao salvar. Rode o SQL de produtos no Supabase e confira o login.'},'products')
 }
 function shrink(file,cb){
   if(!file||file.type.indexOf('image/')!==0){alert('Escolha um arquivo de imagem.');return}
@@ -145,9 +163,10 @@ function loadRev(){
   if(!SB)return done(locR());
   rest('reviews?select=*&order=created_at.desc&limit=300').then(function(r){return r.json()}).then(done).catch(showErr)
 }
-function setRv(id,st){
-  if(!SB){var L=locR();L.forEach(function(x){if(x.id===id)x.status=st});localStorage.setItem('zox_reviews',JSON.stringify(L));return loadRev()}
-  rest('reviews?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:st})}).then(loadRev).catch(showErr)
+function setRv(id,st,tag){
+  var body={status:st};if(tag!==undefined)body.tag=tag||null;
+  if(!SB){var L=locR();L.forEach(function(x){if(x.id===id){x.status=st;if(tag!==undefined)x.tag=tag||null}});localStorage.setItem('zox_reviews',JSON.stringify(L));return loadRev()}
+  rest('reviews?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)}).then(loadRev).catch(showErr)
 }
 function delRv(id){
   if(!confirm('Excluir esta avaliação definitivamente?'))return;
@@ -161,9 +180,9 @@ function drawRev(){
   var btn=function(r,st,l,c){return r.status===st?'':'<button class="btn '+(c||'')+'" data-a="rvst" data-id="'+esc(r.id)+'" data-s="'+st+'">'+l+'</button>'};
   $('#vr').innerHTML='<div class="bar"><div class="tabs">'+tabs+'</div></div>'+(L.length?L.map(function(r){
     var n=Math.max(1,Math.min(5,r.rating|0)),s=RS[r.status]||RS.pendente;
-    return '<div class="o on"><div class="oh" style="cursor:default"><span class="id" style="color:#f5b301;min-width:100px">'+'★'.repeat(n)+'☆'.repeat(5-n)+'</span><span class="c">'+esc(r.name)+'<small>'+dt(r.created_at)+'</small></span>'+
+    return '<div class="o on"><div class="oh" style="cursor:default"><span class="id" style="color:#f5b301;min-width:100px">'+'★'.repeat(n)+'☆'.repeat(5-n)+'</span><span class="c">'+esc(r.name)+'<small>'+dt(r.created_at)+(r.product?' • Produto: '+esc(r.product):'')+'</small></span>'+
      '<span class="pill" style="color:'+s[1]+';border-color:'+s[1]+'55;background:'+s[1]+'1a">'+s[0]+'</span></div><div class="od" style="display:block;padding-top:.9rem"><p style="line-height:1.6;white-space:pre-wrap">'+esc(r.comment)+'</p>'+
-     '<div class="ac">'+btn(r,'aprovada','✓ Aprovar (publicar no site)','ok')+btn(r,'recusada','Recusar','no')+btn(r,'pendente','Voltar para pendente')+'<button class="btn no" data-a="rvdel" data-id="'+esc(r.id)+'">Excluir</button></div></div></div>'
+     '<div style="margin-top:.9rem"><label style="display:block;font-size:.78rem;color:var(--t2);margin-bottom:.35rem">Tag antes do nome no site (opcional)</label><input type="text" data-tg="'+esc(r.id)+'" maxlength="40" value="'+esc(r.tag)+'" placeholder="Ex.: Owner Servidor RPG" style="width:100%;padding:.6rem .8rem;border-radius:10px;border:1px solid var(--bd);background:var(--s2);color:var(--tx);font:inherit;font-size:.88rem"></div>'+'<div class="ac">'+btn(r,'aprovada','✓ Aprovar (publicar no site)','ok')+(r.status==='aprovada'?'<button class="btn" data-a="rvtag" data-id="'+esc(r.id)+'">Salvar tag</button>':'')+btn(r,'recusada','Recusar','no')+btn(r,'pendente','Voltar para pendente')+'<button class="btn no" data-a="rvdel" data-id="'+esc(r.id)+'">Excluir</button></div></div></div>'
   }).join(''):'<div class="em">Nenhuma avaliação nesta categoria.</div>')
 }
 function sum(st){return orders.filter(function(o){return o.status===st}).reduce(function(a,o){return a+Number(o.total||0)},0)}
@@ -193,7 +212,12 @@ document.addEventListener('click',function(e){
   var t=e.target.closest('[data-f]');if(t){flt=t.dataset.f;return draw()}
   var b=e.target.closest('[data-a]');if(!b)return;var id=b.dataset.id,a=b.dataset.a;
   if(a==='savepay')return savePay();
-  if(a==='rvst')return setRv(id,b.dataset.s);
+  if(a==='rvst'||a==='rvtag'){var ti=document.querySelector('[data-tg="'+id+'"]'),tg=ti?ti.value.trim():undefined;
+    if(a==='rvtag')return setRv(id,'aprovada',tg);
+    return setRv(id,b.dataset.s,b.dataset.s==='aprovada'?tg:undefined)}
+  if(a==='padd')return addProd();
+  if(a==='psave')return saveProds();
+  if(a==='pdel'){prods.splice(+id,1);return drawProds()}
   if(a==='rvdel')return delRv(id);
   if(a==='rmimg'){readPay();pay[id].qr='';return drawPay()}
   if(a==='tg'){openId[id]=!openId[id];draw()}
