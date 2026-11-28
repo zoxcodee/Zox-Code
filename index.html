@@ -1977,7 +1977,7 @@ var PAY = {};
 try { PAY = JSON.parse(localStorage.getItem('zox_pay_cache') || '{}'); } catch (e) {}
 function loadPay() {
   if (CFG.supabaseUrl && CFG.supabaseKey) {
-    fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/settings?key=eq.payment&select=value', { headers: { apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey } })
+    fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/settings?key=eq.payment&select=value', { headers: { apikey: CFG.supabaseKey } })
       .then(function (r) { return r.json(); })
       .then(function (a) { if (a && a[0] && a[0].value) { PAY = a[0].value; try { localStorage.setItem('zox_pay_cache', JSON.stringify(PAY)); } catch (e) {} } })
       .catch(function () {});
@@ -2127,7 +2127,7 @@ function sendOrder(status) {
   if (CFG.supabaseUrl && CFG.supabaseKey) {
     try {
       fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/submit_order', { method: 'POST',
-        headers: { apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ o: o }) }).catch(function () {});
+        headers: { apikey: CFG.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ o: o }) }).catch(function () {});
     } catch (e) {}
   } else {
     try {
@@ -2256,7 +2256,7 @@ window.ZoxCart = { add: add, open: openDr, config: CFG };
 var C = (window.ZoxCart && window.ZoxCart.config) || {}, SB = !!(C.supabaseUrl && C.supabaseKey), base = SB ? C.supabaseUrl.replace(/\/$/, '') + '/rest/v1/' : '';
 var $ = function (q, r) { return (r || document).querySelector(q); };
 var esc = function (t) { return String(t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-var hd = function (x) { return Object.assign({ apikey: C.supabaseKey, Authorization: 'Bearer ' + C.supabaseKey, 'Content-Type': 'application/json' }, x || {}); };
+var hd = function (x) { return Object.assign({ apikey: C.supabaseKey, 'Content-Type': 'application/json' }, x || {}); };
 function loc() { try { return JSON.parse(localStorage.getItem('zox_reviews') || '[]'); } catch (e) { return []; } }
 function show(list) {
   var g = $('.testimonial-grid'); if (!g) return;
