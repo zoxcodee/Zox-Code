@@ -1753,7 +1753,7 @@ html{scroll-padding-top:72px}
         <h4>Discord Direto</h4>
         <div class="contact-info">bzxfpss</div>
         <div class="contact-desc">Envie uma mensagem privada para falar com a equipe</div>
-        <button class="contact-link" onclick="alert('Copie o nome de usuário: bzxfpss e abra no Discord')">Copiar Nome</button>
+        <button class="contact-link" onclick="zoxDiscordName()">Copiar Nome</button>
       </div>
 
       <div class="contact-box">
@@ -1941,7 +1941,8 @@ document.addEventListener('click',function(e){var t=e.target.closest('.shop-tab'
 var CFG = {
   discord: 'https://discord.gg/DuC8QJBJZe',
   supabaseUrl: 'https://kgsjuosvkgkpbiioovyt.supabase.co',
-  supabaseKey: 'sb_publishable_9mgod_MZQ3QNGDs6d6RErg_ahL_xSqj'
+  supabaseKey: 'sb_publishable_9mgod_MZQ3QNGDs6d6RErg_ahL_xSqj',
+  autoPix: true   // Pix com confirmação automática (Mercado Pago via Supabase). false = modo manual antigo
 };
 
 var CAT = {
@@ -1989,7 +1990,7 @@ function okImg(u) { return typeof u === 'string' && /^data:image\/(png|jpe?g|web
 function okUrl(u) { return typeof u === 'string' && /^https?:\/\//i.test(u); }
 function methods() {
   var m = [], P = PAY.pix || {}, C = PAY.card || {};
-  if (P.code || okImg(P.qr)) m.push('pix');
+  if ((CFG.autoPix && CFG.supabaseUrl) || P.code || okImg(P.qr)) m.push('pix');
   if (okUrl(C.link) || okImg(C.qr) || C.note) m.push('card');
   return m;
 }
@@ -2071,7 +2072,7 @@ var ov = $('#zcOv'), dr = $('#zcDr'), md = $('#zcMd'), box = $('#zcBox'), tt = $
 function toast(m) { tt.textContent = m; tt.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(function () { tt.classList.remove('on'); }, 2200); }
 function lock() { document.body.style.overflow = (dr.classList.contains('on') || md.classList.contains('on')) ? 'hidden' : ''; }
 function openDr() { render(); dr.classList.add('on'); ov.classList.add('on'); lock(); }
-function closeAll() { dr.classList.remove('on'); md.classList.remove('on'); ov.classList.remove('on'); lock(); }
+function closeAll() { stopPoll(); dr.classList.remove('on'); md.classList.remove('on'); ov.classList.remove('on'); lock(); }
 
 /* ===== NAVBAR ===== */
 function mountNav() {
@@ -2128,9 +2129,9 @@ function sendOrder(status) {
     items: ids().map(function (i) { return { id: i, n: CAT[i].n, q: cart[i], p: CAT[i].p, m: CAT[i].m }; }), total: T.t, monthly: T.m };
   if (CFG.supabaseUrl && CFG.supabaseKey) {
     try {
-      fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/submit_order', { method: 'POST',
+      return fetch(CFG.supabaseUrl.replace(/\/$/, '') + '/rest/v1/rpc/submit_order', { method: 'POST',
         headers: { apikey: CFG.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ o: o }) }).catch(function () {});
-    } catch (e) {}
+    } catch (e) { return Promise.resolve(); }
   } else {
     try {
       var L = JSON.parse(localStorage.getItem('zox_orders') || '[]'), x = L.filter(function (z) { return z.id === o.id; })[0];
@@ -2139,6 +2140,7 @@ function sendOrder(status) {
       localStorage.setItem('zox_orders', JSON.stringify(L));
     } catch (e) {}
   }
+  return Promise.resolve();
 }
 
 /* ===== CHECKOUT ===== */
@@ -2158,10 +2160,43 @@ function head() {
 function field(id, lb, ph, val, w, tp) {
   return '<div class="' + (w ? 'w' : '') + '"><label for="' + id + '">' + lb + '</label><input id="' + id + '" type="' + (tp || 'text') + '" placeholder="' + ph + '" value="' + esc(val || '') + '"></div>';
 }
+/* ===== PIX AUTOMÁTICO (Mercado Pago via Supabase) ===== */
+function autoOn() { return !!(CFG.autoPix && CFG.supabaseUrl && CFG.supabaseKey && S.method === 'pix'); }
+function sbBase() { return CFG.supabaseUrl.replace(/\/$/, ''); }
+function stopPoll() { if (S && S.poll) { clearInterval(S.poll); S.poll = null; } }
+function startPoll() {
+  stopPoll(); var oid = S.order;
+  S.poll = setInterval(function () {
+    fetch(sbBase() + '/rest/v1/rpc/order_status', { method: 'POST', headers: { apikey: CFG.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ oid: oid }) })
+      .then(function (r) { return r.json(); })
+      .then(function (st) { if (st === 'pago' && S.order === oid) paidNow(); })
+      .catch(function () {});
+  }, 3000);
+}
+function paidNow() {
+  stopPoll(); if (S.step === 3) return;
+  var t = orderText(); S.paid = true; S.step = 3;
+  try { localStorage.setItem('zox_last_order', t); } catch (x) {}
+  cart = {}; save(); render(); view();
+}
+function startAuto(sent) {
+  if (S.auto) return;
+  S.auto = 'loading'; var oid = S.order;
+  (sent || Promise.resolve()).then(function () {
+    return fetch(sbBase() + '/functions/v1/create-pix', { method: 'POST', headers: { apikey: CFG.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ order_id: oid }) });
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }); })
+  .then(function (x) {
+    if (S.order !== oid) return;
+    if (x.ok && x.j.status === 'pago') return paidNow();
+    if (x.ok && x.j.qr_code) { S.pix = x.j; S.auto = 'ready'; } else S.auto = 'error';
+    if (S.step === 2) view();
+  }).catch(function () { if (S.order === oid) { S.auto = 'error'; if (S.step === 2) view(); } });
+}
+
 function checkout() {
   if (!ids().length) return;
-  loadPay();
-  S = { step: 1, method: 'pix', d: S.d || {}, order: null };
+  loadPay(); stopPoll();
+  S = { step: 1, method: 'pix', d: S.d || {}, order: null, auto: null, pix: null, paid: false, poll: null };
   dr.classList.remove('on'); md.classList.add('on'); ov.classList.add('on'); lock(); view();
 }
 function view() {
@@ -2182,12 +2217,26 @@ function view() {
       if (M.length > 1) tabs = '<div class="zc-mt">' + M.map(function (k) {
         return '<button class="zc-mc ' + (S.method === k ? 'on' : '') + '" data-a="m" data-id="' + k + '"><b>' + (k === 'pix' ? '⚡ Pix' : '💳 Cartão') + '</b><small>' + (k === 'pix' ? 'Aprovação rápida' : 'Link de pagamento') + '</small></button>';
       }).join('') + '</div>';
-      var val = '<div class="zc-val">Valor a pagar: <b>' + fm(T2.t) + '</b></div>';
+      var val = '<div class="zc-val">Valor a pagar: <b>' + fm(S.auto === 'ready' && S.pix && S.pix.amount ? S.pix.amount : T2.t) + '</b></div>';
       if (pix) {
-        p = '<div class="zc-pp">' + (okImg(P.qr) ? '<div class="zc-qr"><img alt="QR Code Pix" src="' + P.qr + '"></div>' : '') + val +
+        var hasStatic = !!(P.code || okImg(P.qr));
+        var legacy = '<div class="zc-pp">' + (okImg(P.qr) ? '<div class="zc-qr"><img alt="QR Code Pix" src="' + P.qr + '"></div>' : '') + val +
           '<small>Abra o app do seu banco → Pix → ' + (okImg(P.qr) ? 'Ler QR Code ou ' : '') + 'Pix Copia e Cola</small></div>' +
           (P.code ? '<textarea class="zc-cd" id="zcC" readonly>' + esc(P.code) + '</textarea><button class="zc-bt ghost" style="margin:0 0 1rem" data-a="cp">Copiar código Pix</button>' : '') +
           (P.note ? '<div class="zc-nt" style="margin:-.4rem 0 1rem;text-align:left">' + esc(P.note) + '</div>' : '');
+        if (!autoOn()) p = legacy;
+        else if (S.auto === 'ready' && S.pix) {
+          var b64 = /^[A-Za-z0-9+\/=]+$/.test(S.pix.qr_base64 || '') ? S.pix.qr_base64 : '';
+          p = '<div class="zc-pp">' + (b64 ? '<div class="zc-qr"><img alt="QR Code Pix" src="data:image/png;base64,' + b64 + '"></div>' : '') + val +
+            '<small>Abra o app do seu banco → Pix → ' + (b64 ? 'Ler QR Code ou ' : '') + 'Pix Copia e Cola</small></div>' +
+            '<textarea class="zc-cd" id="zcC" readonly>' + esc(S.pix.qr_code) + '</textarea><button class="zc-bt ghost" style="margin:0 0 1rem" data-a="cp">Copiar código Pix</button>' +
+            '<div class="zc-nt" style="margin:-.4rem 0 1rem;text-align:left">⏳ Aguardando o pagamento… a confirmação é automática, não feche esta janela.</div>';
+        } else if (S.auto === 'error') {
+          p = '<div class="zc-wr">⚠️ Não foi possível gerar o Pix automático agora.' + (hasStatic ? ' Use o Pix abaixo e depois clique em “Já fiz o pagamento”.' : '') + '</div>' +
+            '<button class="zc-bt ghost" style="margin:0 0 1rem" data-a="retry">Tentar novamente</button>' + (hasStatic ? legacy : '');
+        } else {
+          p = '<div class="zc-pp">' + val + '<small>⏳ Gerando o seu Pix…</small></div>';
+        }
       } else {
         p = '<div class="zc-pp">' + (okImg(C.qr) ? '<div class="zc-qr"><img alt="Pagamento no cartão" src="' + C.qr + '"></div>' : '') + val +
           (C.note ? '<p style="margin:.6rem 0;font-size:.9rem">' + esc(C.note) + '</p>' : '') +
@@ -2195,15 +2244,19 @@ function view() {
       }
     }
     h += '<div class="zc-gr"><div class="zc-mn"><h3>Forma de pagamento</h3>' + tabs + p +
-      '<button class="zc-bt" data-a="s3">' + (M.length ? 'Já fiz o pagamento' : 'Confirmar pedido') + '</button><button class="zc-bt ghost" data-a="s1">Voltar</button></div>' +
+      ((pix && autoOn() && S.auto !== 'error') ? '' : '<button class="zc-bt" data-a="s3">' + (M.length ? 'Já fiz o pagamento' : 'Confirmar pedido') + '</button>') + '<button class="zc-bt ghost" data-a="s1">Voltar</button></div>' +
       '<div class="zc-sd">' + summary() + '<div class="zc-nt" style="text-align:left;margin-top:1rem">Pedido ' + S.order + '</div></div></div>';
   } else {
-    h += '<div class="zc-gr one"><div class="zc-ok"><div class="zc-ck">✓</div><h2>Pedido recebido!</h2><div class="zc-oid">' + S.order + '</div>' +
-      '<p style="color:var(--text-secondary,#666);margin-bottom:1.4rem">Agora abra um ticket no nosso Discord e envie o número do pedido' + (S.method === 'pix' ? ' junto com o comprovante' : '') + '. Assim que confirmarmos, liberamos o seu bot.</p>' +
-      '<button class="zc-bt" data-a="dc">Abrir ticket no Discord</button><button class="zc-bt ghost" data-a="close">Voltar ao site</button><div class="zc-nt">O resumo do pedido é copiado automaticamente.</div></div></div>';
+    h += '<div class="zc-gr one"><div class="zc-ok"><div class="zc-ck">✓</div><h2>' + (S.paid ? 'Pagamento confirmado!' : 'Pedido recebido!') + '</h2><div class="zc-oid">' + S.order + '</div>' +
+      '<p style="color:var(--text-secondary,#666);margin-bottom:1.4rem">' + (S.paid ? 'Recebemos o seu pagamento. Agora abra um ticket no nosso Discord e envie o número do pedido para liberarmos o seu bot.' : 'Agora abra um ticket no nosso Discord e envie o número do pedido' + (S.method === 'pix' ? ' junto com o comprovante' : '') + '. Assim que confirmarmos, liberamos o seu bot.') + '</p>' +
+      '<button class="zc-bt" data-a="dc">Abrir ticket no Discord</button><button class="zc-bt ghost" data-a="close">Voltar ao site</button>' + (S.paid ? '' : '<div class="zc-nt">O resumo do pedido é copiado automaticamente.</div>') + '</div></div>';
   }
   box.innerHTML = h; box.scrollTop = 0;
-  if (S.step === 2) sendOrder('a_pagar');
+  if (S.step === 2) {
+    var sent = sendOrder('a_pagar');
+    if (autoOn()) startAuto(sent);
+    if (S.auto === 'ready') startPoll();
+  } else stopPoll();
 }
 
 function orderText() {
@@ -2238,6 +2291,7 @@ root.addEventListener('click', function (e) {
   else if (a === 's1') { S.step = 1; view(); }
   else if (a === 's2') { if (readForm()) { S.step = 2; view(); } }
   else if (a === 'm') { S.method = id; view(); }
+  else if (a === 'retry') { S.auto = null; view(); }
   else if (a === 'cp') { copy($('#zcC').value); toast('Código Pix copiado!'); }
   else if (a === 's3') { S.step = 3; var t = orderText(); sendOrder('pendente'); copy(t); try { localStorage.setItem('zox_last_order', t); } catch (x) {} cart = {}; save(); render(); view(); }
   else if (a === 'dc') { window.open(CFG.discord, '_blank', 'noopener'); }
@@ -2334,5 +2388,45 @@ load();
 })();
 </script>
 
+<script>
+/* Caixa de diálogo do site (substitui o alert do navegador) */
+(function () {
+'use strict';
+var st = document.createElement('style');
+st.textContent = '.zd-ov{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:1rem;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);opacity:0;transition:opacity .15s}.zd-ov.on{opacity:1}' +
+  '.zd{width:100%;max-width:400px;background:var(--section-bg,#161616);color:var(--text-primary,#fff);border:1px solid var(--border-color,#333);border-radius:18px;padding:1.7rem 1.5rem 1.4rem;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5);transform:translateY(8px) scale(.97);transition:transform .15s}.zd-ov.on .zd{transform:none}' +
+  '.zd-ic{width:56px;height:56px;margin:0 auto .9rem;border-radius:50%;display:grid;place-items:center;font-size:1.6rem;background:rgba(0,102,255,.15);border:1px solid rgba(0,102,255,.4)}' +
+  '.zd h3{font-size:1.2rem;margin-bottom:.45rem}.zd p{color:var(--text-secondary,#aaa);font-size:.95rem;line-height:1.55;margin-bottom:1.3rem}' +
+  '.zd code{background:var(--bg-primary,#0f0f0f);border:1px solid var(--border-color,#333);border-radius:6px;padding:.12rem .5rem;color:var(--text-primary,#fff);font-size:.9rem}' +
+  '.zd-bt{display:flex;gap:.6rem}.zd-bt button{flex:1;padding:.8rem;border-radius:12px;font:inherit;font-weight:700;cursor:pointer;border:1px solid var(--border-color,#333);background:transparent;color:var(--text-primary,#fff);transition:.2s}' +
+  '.zd-bt button:hover{border-color:var(--accent-color,#06f)}.zd-bt .zd-p{border:0;color:#fff;background:linear-gradient(135deg,#0066ff,#0040ff)}.zd-bt .zd-p:hover{box-shadow:0 6px 18px rgba(0,102,255,.4)}';
+document.head.appendChild(st);
+var esc = function (t) { return String(t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+function dialog(o, onOk) {
+  var old = document.getElementById('zdOv'); if (old) old.remove();
+  var ov = document.createElement('div'); ov.id = 'zdOv'; ov.className = 'zd-ov';
+  ov.innerHTML = '<div class="zd" role="dialog" aria-modal="true" aria-labelledby="zdT"><div class="zd-ic">' + (o.icon || 'ℹ️') + '</div><h3 id="zdT">' + esc(o.title) + '</h3><p>' + o.html + '</p><div class="zd-bt">' +
+    (o.cancel ? '<button type="button" data-d="0">' + esc(o.cancel) + '</button>' : '') + '<button type="button" class="zd-p" data-d="1">' + esc(o.ok || 'OK') + '</button></div></div>';
+  function fin(yes) { document.removeEventListener('keydown', kd); ov.classList.remove('on'); setTimeout(function () { ov.remove(); }, 160); if (yes && onOk) onOk(); }
+  function kd(e) { if (e.key === 'Escape') fin(0); }
+  ov.addEventListener('click', function (e) { if (e.target === ov) return fin(0); var b = e.target.closest('[data-d]'); if (b) fin(b.dataset.d === '1'); });
+  document.addEventListener('keydown', kd); document.body.appendChild(ov);
+  requestAnimationFrame(function () { ov.classList.add('on'); var f = ov.querySelector('[data-d="1"]'); if (f) f.focus(); });
+}
+function copyTxt(t) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; }); } catch (e) {}
+  var a = document.createElement('textarea'); a.value = t; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select();
+  var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} a.remove(); return Promise.resolve(ok);
+}
+window.zoxDiscordName = function () {
+  var user = 'bzxfpss', link = ((window.ZoxCart || {}).config || {}).discord;
+  copyTxt(user).then(function (ok) {
+    dialog({ icon: '💬', title: ok ? 'Nome de usuário copiado!' : 'Nosso usuário no Discord',
+      html: (ok ? 'Copiamos <code>' + user + '</code> para você.' : 'Nosso usuário é <code>' + user + '</code>.') + ' Abra o Discord e cole na busca para falar com a gente.',
+      ok: link ? 'Abrir Discord' : 'Entendi', cancel: link ? 'Fechar' : '' }, function () { if (link) window.open(link, '_blank', 'noopener'); });
+  });
+};
+})();
+</script>
 </body>
 </html>

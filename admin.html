@@ -42,6 +42,13 @@ input[type=file]::file-selector-button{border:1px solid var(--bd);background:var
 .up b{font-size:.92rem}.up small{color:var(--t3);font-size:.76rem}
 .pf label.up{margin:.2rem 0 0;color:var(--tx);font-size:inherit}.pf label.btn{margin:0;font-size:.85rem;color:var(--tx)}
 .pa{display:flex;flex-direction:column;gap:.6rem;align-items:flex-start}
+.dlg-ov{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:1rem;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);opacity:0;transition:opacity .15s}.dlg-ov.on{opacity:1}
+.dlg{width:100%;max-width:400px;background:var(--s1);border:1px solid var(--bd);border-radius:18px;padding:1.6rem 1.5rem 1.3rem;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.6);transform:translateY(8px) scale(.97);transition:transform .15s}.dlg-ov.on .dlg{transform:none}
+.dlg-ic{width:54px;height:54px;margin:0 auto .9rem;border-radius:50%;display:grid;place-items:center;font-size:1.5rem;background:rgba(0,102,255,.15);border:1px solid rgba(0,102,255,.4)}.dlg-ic.d{background:rgba(229,72,77,.14);border-color:rgba(229,72,77,.45)}
+.dlg h3{font-size:1.15rem;margin-bottom:.45rem}.dlg p{color:var(--t2);font-size:.92rem;line-height:1.5;margin-bottom:1.3rem}
+.dlg p code{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:.1rem .45rem;color:var(--tx);font-size:.85rem}
+.dlg-bt{display:flex;gap:.6rem}.dlg-bt .btn{flex:1;padding:.7rem}
+.btn.dng{background:#e5484d;border:0;color:#fff;font-weight:700}.btn.dng:hover{background:#f0575c;color:#fff;box-shadow:0 6px 18px rgba(229,72,77,.4)}
 </style></head><body>
 <div id="app"></div>
 <script>
@@ -66,10 +73,22 @@ function setSt(id,st){
   if(!SB){var L=loc();L.forEach(function(o){if(o.id===id)o.status=st});localStorage.setItem('zox_orders',JSON.stringify(L));return load()}
   rest('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:st})}).then(load).catch(showErr)
 }
+/* ===== Caixa de diálogo (substitui confirm/alert do navegador) ===== */
+function dlg(o,onOk){
+  var old=document.getElementById('dlg');if(old)old.remove();
+  var ov=document.createElement('div');ov.id='dlg';ov.className='dlg-ov';
+  ov.innerHTML='<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT"><div class="dlg-ic'+(o.danger?' d':'')+'">'+(o.icon||(o.danger?'🗑':'ℹ️'))+'</div><h3 id="dlgT">'+esc(o.title||'')+'</h3><p>'+(o.html||esc(o.msg||''))+'</p><div class="dlg-bt">'+(o.cancel===false?'':'<button class="btn" data-d="0">'+esc(o.cancel||'Cancelar')+'</button>')+'<button class="btn '+(o.danger?'dng':'p')+'" data-d="1">'+esc(o.ok||'OK')+'</button></div></div>';
+  function fin(yes){document.removeEventListener('keydown',kd);ov.classList.remove('on');setTimeout(function(){ov.remove()},160);if(yes&&onOk)onOk()}
+  function kd(e){if(e.key==='Escape')fin(0)}
+  ov.addEventListener('click',function(e){if(e.target===ov)return fin(0);var b=e.target.closest('[data-d]');if(b)fin(b.dataset.d==='1')});
+  document.addEventListener('keydown',kd);document.body.appendChild(ov);
+  requestAnimationFrame(function(){ov.classList.add('on');var f=ov.querySelector(o.danger&&o.cancel!==false?'[data-d="0"]':'[data-d="1"]');if(f)f.focus()})
+}
 function del(id){
-  if(!confirm('Excluir o pedido '+id+' definitivamente?'))return;
-  if(!SB){localStorage.setItem('zox_orders',JSON.stringify(loc().filter(function(o){return o.id!==id})));return load()}
-  rest('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'}).then(load).catch(showErr)
+  dlg({danger:1,icon:'🗑',title:'Excluir pedido?',html:'O pedido <code>'+esc(id)+'</code> será removido definitivamente. Essa ação não pode ser desfeita.',ok:'Excluir'},function(){
+    if(!SB){localStorage.setItem('zox_orders',JSON.stringify(loc().filter(function(o){return o.id!==id})));return load()}
+    rest('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'}).then(load).catch(showErr)
+  })
 }
 function logout(){tok='';sessionStorage.removeItem('zox_tok');shell()}
 function login(){
@@ -122,11 +141,11 @@ function saveProds(){
   putSet({list:prods},function(){drawProds();$('#pg').style.color='#22c55e';$('#pg').textContent='Salvo ✓ — já aparece no formulário de avaliação.'},function(){$('#pg').style.color='#e5484d';$('#pg').textContent='Erro ao salvar. Rode o SQL de produtos no Supabase e confira o login.'},'products')
 }
 function shrink(file,cb){
-  if(!file||file.type.indexOf('image/')!==0){alert('Escolha um arquivo de imagem.');return}
+  if(!file||file.type.indexOf('image/')!==0){dlg({icon:'🖼️',title:'Arquivo inválido',msg:'Escolha um arquivo de imagem (PNG ou JPG).',cancel:false,ok:'Entendi'});return}
   var fr=new FileReader();fr.onload=function(){var im=new Image();im.onload=function(){
     var k=Math.min(1,520/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
     var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/png'))};
-    im.onerror=function(){alert('Não foi possível ler a imagem.')};im.src=fr.result};fr.readAsDataURL(file)
+    im.onerror=function(){dlg({icon:'🖼️',title:'Imagem ilegível',msg:'Não foi possível ler essa imagem. Tente outro arquivo.',cancel:false,ok:'Entendi'})};im.src=fr.result};fr.readAsDataURL(file)
 }
 function readPay(){
   var v=function(i){var e=$(i);return e?e.value.trim():null};
@@ -149,7 +168,7 @@ function drawPay(){
 }
 function savePay(){
   readPay();var l=pay.card.link||'';
-  if(l&&!/^https?:\/\//i.test(l)){alert('O link do cartão precisa começar com http:// ou https://');return}
+  if(l&&!/^https?:\/\//i.test(l)){dlg({icon:'🔗',title:'Link inválido',msg:'O link do cartão precisa começar com http:// ou https://',cancel:false,ok:'Entendi'});return}
   var out={pix:{qr:pay.pix.qr||'',code:pay.pix.code||'',note:pay.pix.note||''},card:{link:l,qr:pay.card.qr||'',note:pay.card.note||''}};
   $('#pm').textContent='Salvando…';
   putSet(out,function(){$('#pm').style.color='#22c55e';$('#pm').textContent='Salvo ✓ — já está valendo no site.'},function(){$('#pm').style.color='#e5484d';$('#pm').textContent='Erro ao salvar. Confira o SQL do Supabase e o login.'})
@@ -169,9 +188,10 @@ function setRv(id,st,tag){
   rest('reviews?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)}).then(loadRev).catch(showErr)
 }
 function delRv(id){
-  if(!confirm('Excluir esta avaliação definitivamente?'))return;
-  if(!SB){localStorage.setItem('zox_reviews',JSON.stringify(locR().filter(function(x){return x.id!==id})));return loadRev()}
-  rest('reviews?id=eq.'+encodeURIComponent(id),{method:'DELETE'}).then(loadRev).catch(showErr)
+  dlg({danger:1,icon:'🗑',title:'Excluir avaliação?',msg:'Esta avaliação será removida definitivamente. Essa ação não pode ser desfeita.',ok:'Excluir'},function(){
+    if(!SB){localStorage.setItem('zox_reviews',JSON.stringify(locR().filter(function(x){return x.id!==id})));return loadRev()}
+    rest('reviews?id=eq.'+encodeURIComponent(id),{method:'DELETE'}).then(loadRev).catch(showErr)
+  })
 }
 function drawRev(){
   var cnt=function(k){return rv.filter(function(r){return k==='todas'||r.status===k}).length};
