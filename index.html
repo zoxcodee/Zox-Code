@@ -1657,23 +1657,6 @@ html{scroll-padding-top:72px}
   
   <div class="testimonials">
     <div class="testimonial-grid">
-      <div class="testimonial">
-        <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
-        <div class="testimonial-text">"Absolutamente incrível! Meu servidor cresceu muito depois de implementar o bot. A equipe é super responsiva e atenciosa. Recomendo muito!"</div>
-        <div class="testimonial-author">João Silva - Owner Servidor RPG</div>
-      </div>
-
-      <div class="testimonial">
-        <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
-        <div class="testimonial-text">"Melhor investimento que fiz para meu servidor! Sistema estável, suporte 24/7 de verdade, e eles implementam rápido qualquer customização que peço."</div>
-        <div class="testimonial-author">Carlos Santos - Gerenciador Servidor Gaming</div>
-      </div>
-
-      <div class="testimonial">
-        <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
-        <div class="testimonial-text">"Profissionais mesmo! Desde o primeiro contato até a implementação, tudo foi perfeito. O bot funciona sem problemas e o suporte é de primeira qualidade."</div>
-        <div class="testimonial-author">Ana Oliveira - CEO Comunidade Online</div>
-      </div>
     </div>
   </div>
 </div>
@@ -2317,6 +2300,7 @@ function loc() { try { return JSON.parse(localStorage.getItem('zox_reviews') || 
 function show(list) {
   var g = $('.testimonial-grid'); if (!g) return;
   [].slice.call(g.querySelectorAll('.rv-dyn')).forEach(function (x) { x.remove(); });
+  var tw = g.closest('.testimonials'); if (tw) tw.style.display = list.length ? '' : 'none';
   list.forEach(function (r) {
     var n = Math.max(1, Math.min(5, r.rating | 0)), d = document.createElement('div'); d.className = 'testimonial rv-dyn';
     d.innerHTML = '<div class="testimonial-stars">' + '⭐'.repeat(n) + '</div><div class="testimonial-text">“' + esc(r.comment) + '”</div><div class="testimonial-author">' + (r.tag ? '<span class="rv-tag">' + esc(r.tag) + '</span>' : '') + esc(r.name) + ' • ' + esc(r.product || 'Cliente') + '</div>';
